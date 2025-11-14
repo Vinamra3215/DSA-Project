@@ -315,75 +315,60 @@ const CashFlowMinimizer = () => {
       const greedyAlgorithm = (netAmount) => {
         const steps = [];
         const balances = [];
-
         Object.entries(netAmount).forEach(([person, amount]) => {
           if (Math.abs(amount) > 0.01) {
             balances.push({ person, amount });
           }
         });
-
-        steps.push({ type: 'info', message: 'Starting greedy algorithm - finding max creditor/debtor each iteration' });
+        steps.push({ type: 'info', message: 'Starting greedy algorithm - optimized O(N²) with simple linear scans' });
         steps.push({ type: 'consider', people: balances.map(b => b.person) });
-
         const minimized = [];
-
-        // True O(N²) greedy: Find max creditor and max debtor in each iteration
+        // Optimized O(N²) greedy: Simple linear scan, no sorting overhead
         while (true) {
-          // O(N) - Find maximum creditor
+          // Single pass O(N) - Find both max creditor and max debtor together
           let maxCreditIdx = -1;
+          let maxDebitIdx = -1;
           let maxCredit = 0;
+          let maxDebit = 0;
+          
           for (let i = 0; i < balances.length; i++) {
             if (balances[i].amount > maxCredit) {
               maxCredit = balances[i].amount;
               maxCreditIdx = i;
             }
-          }
-
-          // O(N) - Find maximum debtor
-          let maxDebitIdx = -1;
-          let maxDebit = 0;
-          for (let i = 0; i < balances.length; i++) {
             if (balances[i].amount < -maxDebit) {
               maxDebit = -balances[i].amount;
               maxDebitIdx = i;
             }
           }
-
           // Check if we're done
           if (maxCredit < 0.01 && maxDebit < 0.01) {
             steps.push({ type: 'info', message: 'All balances settled' });
             break;
           }
-
           const creditor = balances[maxCreditIdx];
           const debtor = balances[maxDebitIdx];
-
           steps.push({ 
             type: 'select', 
             creditor: creditor.person, 
             debtor: debtor.person,
             message: \`Greedy: Found max creditor \${creditor.person} (\${creditor.amount.toFixed(0)}) and max debtor \${debtor.person} (\${Math.abs(debtor.amount).toFixed(0)})\` 
           });
-
           const settleAmount = Math.min(creditor.amount, maxDebit);
-
           const transaction = {
             from: debtor.person,
             to: creditor.person,
             amount: settleAmount
           };
-
           minimized.push(transaction);
           steps.push({ 
             type: 'transaction', 
             ...transaction,
             message: \`\${debtor.person} pays \${settleAmount.toFixed(2)} to \${creditor.person}\` 
           });
-
-          // Update balances
+          // Update balances in-place (faster than creating new arrays)
           creditor.amount -= settleAmount;
           debtor.amount += settleAmount;
-
           if (creditor.amount < 0.01) {
             steps.push({ type: 'info', message: \`\${creditor.person} settled completely\` });
           }
@@ -391,7 +376,6 @@ const CashFlowMinimizer = () => {
             steps.push({ type: 'info', message: \`\${debtor.person} settled completely\` });
           }
         }
-
         return { transactions: minimized, steps };
       };
 
