@@ -61,7 +61,7 @@ const GraphVisualization = ({ people, transactions, animationSteps, currentStep,
   useEffect(() => {
     const animate = () => {
       setPulsePhase(prev => (prev + 0.05) % (Math.PI * 2));
-
+      
       setParticles(prev => {
         const updated = prev.filter(p => p.life > 0);
         updated.forEach(p => p.update());
@@ -85,7 +85,7 @@ const GraphVisualization = ({ people, transactions, animationSteps, currentStep,
       if (step.type === 'transaction') {
         const fromPos = nodePositions[step.from];
         const toPos = nodePositions[step.to];
-
+        
         if (fromPos && toPos) {
           const newParticles = [];
           for (let i = 0; i < 20; i++) {
@@ -105,7 +105,7 @@ const GraphVisualization = ({ people, transactions, animationSteps, currentStep,
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
-
+    
     canvas.width = 800 * dpr;
     canvas.height = 600 * dpr;
     canvas.style.width = '800px';
@@ -144,12 +144,12 @@ const GraphVisualization = ({ people, transactions, animationSteps, currentStep,
 
       const currentStepData = showOptimized && animationSteps[currentStep];
       const isActive = showOptimized && currentStepData && currentStepData.type === 'transaction' &&
-        currentStepData.from === txn.from && currentStepData.to === txn.to;
+                       currentStepData.from === txn.from && currentStepData.to === txn.to;
 
       ctx.beginPath();
       ctx.moveTo(startX, startY);
       ctx.quadraticCurveTo(controlX, controlY, endX, endY);
-
+      
       if (showOptimized) {
         ctx.strokeStyle = isActive ? '#10b981' : '#6366f1';
         ctx.lineWidth = isActive ? 5 : 3;
@@ -160,12 +160,12 @@ const GraphVisualization = ({ people, transactions, animationSteps, currentStep,
         ctx.lineWidth = 2;
         ctx.shadowBlur = 0;
       }
-
+      
       ctx.stroke();
 
       const arrowSize = 12;
       const endAngle = Math.atan2(endY - controlY, endX - controlX);
-
+      
       ctx.beginPath();
       ctx.moveTo(endX, endY);
       ctx.lineTo(
@@ -182,11 +182,11 @@ const GraphVisualization = ({ people, transactions, animationSteps, currentStep,
 
       const midX = (startX + endX) / 2 + 20 * Math.cos(angle + Math.PI / 2);
       const midY = (startY + endY) / 2 + 20 * Math.sin(angle + Math.PI / 2);
-
+      
       ctx.shadowBlur = 0;
       ctx.fillStyle = '#1e293b';
       ctx.fillRect(midX - 25, midY - 12, 50, 24);
-
+      
       ctx.fillStyle = isActive ? '#10b981' : '#fbbf24';
       ctx.font = 'bold 14px Arial';
       ctx.textAlign = 'center';
@@ -202,13 +202,13 @@ const GraphVisualization = ({ people, transactions, animationSteps, currentStep,
       if (!pos) return;
 
       const currentStepData = showOptimized && animationSteps[currentStep];
-      const isActive = currentStepData &&
-        ((currentStepData.type === 'transaction' &&
-          (currentStepData.from === person || currentStepData.to === person)) ||
-          (currentStepData.type === 'consider' &&
-            currentStepData.people && currentStepData.people.includes(person)) ||
-          (currentStepData.type === 'select' &&
-            (currentStepData.creditor === person || currentStepData.debtor === person)));
+      const isActive = currentStepData && 
+                       ((currentStepData.type === 'transaction' && 
+                         (currentStepData.from === person || currentStepData.to === person)) ||
+                        (currentStepData.type === 'consider' && 
+                         currentStepData.people && currentStepData.people.includes(person)) ||
+                        (currentStepData.type === 'select' && 
+                         (currentStepData.creditor === person || currentStepData.debtor === person)));
 
       const pulseSize = isActive ? 5 + Math.sin(pulsePhase * 3) * 3 : 0;
       const nodeRadius = 30 + pulseSize;
@@ -225,7 +225,7 @@ const GraphVisualization = ({ people, transactions, animationSteps, currentStep,
       ctx.arc(pos.x, pos.y, nodeRadius, 0, 2 * Math.PI);
       ctx.fillStyle = getPersonColor(person);
       ctx.fill();
-
+      
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 3;
       ctx.stroke();
@@ -305,7 +305,7 @@ const CashFlowMinimizer = () => {
   const [customVertexCount, setCustomVertexCount] = useState(5);
   const [showCustomGenerator, setShowCustomGenerator] = useState(false);
   const [animationSpeed, setAnimationSpeed] = useState(1500);
-
+  
   const workerRef = useRef(null);
 
   // Initialize Web Worker with FIXED TIMING
@@ -314,33 +314,58 @@ const CashFlowMinimizer = () => {
       // Algorithm implementations in worker
       const greedyAlgorithm = (netAmount) => {
         const steps = [];
-        const creditors = [];
-        const debtors = [];
+        const balances = [];
 
         Object.entries(netAmount).forEach(([person, amount]) => {
-          if (amount > 0.01) creditors.push({ person, amount });
-          if (amount < -0.01) debtors.push({ person, amount: -amount });
+          if (Math.abs(amount) > 0.01) {
+            balances.push({ person, amount });
+          }
         });
 
-        steps.push({ type: 'info', message: 'Identifying creditors and debtors' });
-        steps.push({ type: 'consider', people: [...creditors.map(c => c.person), ...debtors.map(d => d.person)] });
+        steps.push({ type: 'info', message: 'Starting greedy algorithm - finding max creditor/debtor each iteration' });
+        steps.push({ type: 'consider', people: balances.map(b => b.person) });
 
         const minimized = [];
-        let creditIndex = 0;
-        let debtIndex = 0;
 
-        while (creditIndex < creditors.length && debtIndex < debtors.length) {
-          const creditor = creditors[creditIndex];
-          const debtor = debtors[debtIndex];
+        // True O(N²) greedy: Find max creditor and max debtor in each iteration
+        while (true) {
+          // O(N) - Find maximum creditor
+          let maxCreditIdx = -1;
+          let maxCredit = 0;
+          for (let i = 0; i < balances.length; i++) {
+            if (balances[i].amount > maxCredit) {
+              maxCredit = balances[i].amount;
+              maxCreditIdx = i;
+            }
+          }
+
+          // O(N) - Find maximum debtor
+          let maxDebitIdx = -1;
+          let maxDebit = 0;
+          for (let i = 0; i < balances.length; i++) {
+            if (balances[i].amount < -maxDebit) {
+              maxDebit = -balances[i].amount;
+              maxDebitIdx = i;
+            }
+          }
+
+          // Check if we're done
+          if (maxCredit < 0.01 && maxDebit < 0.01) {
+            steps.push({ type: 'info', message: 'All balances settled' });
+            break;
+          }
+
+          const creditor = balances[maxCreditIdx];
+          const debtor = balances[maxDebitIdx];
 
           steps.push({ 
             type: 'select', 
             creditor: creditor.person, 
             debtor: debtor.person,
-            message: \`Matching \${debtor.person} (owes \${debtor.amount.toFixed(0)}) with \${creditor.person} (owed \${creditor.amount.toFixed(0)})\` 
+            message: \`Greedy: Found max creditor \${creditor.person} (\${creditor.amount.toFixed(0)}) and max debtor \${debtor.person} (\${Math.abs(debtor.amount).toFixed(0)})\` 
           });
 
-          const settleAmount = Math.min(creditor.amount, debtor.amount);
+          const settleAmount = Math.min(creditor.amount, maxDebit);
 
           const transaction = {
             from: debtor.person,
@@ -355,16 +380,15 @@ const CashFlowMinimizer = () => {
             message: \`\${debtor.person} pays \${settleAmount.toFixed(2)} to \${creditor.person}\` 
           });
 
+          // Update balances
           creditor.amount -= settleAmount;
-          debtor.amount -= settleAmount;
+          debtor.amount += settleAmount;
 
           if (creditor.amount < 0.01) {
             steps.push({ type: 'info', message: \`\${creditor.person} settled completely\` });
-            creditIndex++;
           }
-          if (debtor.amount < 0.01) {
+          if (Math.abs(debtor.amount) < 0.01) {
             steps.push({ type: 'info', message: \`\${debtor.person} settled completely\` });
-            debtIndex++;
           }
         }
 
@@ -756,12 +780,12 @@ const CashFlowMinimizer = () => {
     const names = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank'];
     const numPeople = Math.floor(Math.random() * 3) + 4;
     const selectedPeople = names.slice(0, numPeople);
-
+    
     setPeople(selectedPeople);
-
+    
     const randomTransactions = [];
     const numTransactions = Math.floor(Math.random() * 5) + 5;
-
+    
     for (let i = 0; i < numTransactions; i++) {
       const from = selectedPeople[Math.floor(Math.random() * selectedPeople.length)];
       let to = selectedPeople[Math.floor(Math.random() * selectedPeople.length)];
@@ -771,23 +795,23 @@ const CashFlowMinimizer = () => {
       const amt = Math.floor(Math.random() * 90) + 10;
       randomTransactions.push({ from, to, amount: amt });
     }
-
+    
     setTransactions(randomTransactions);
     reset();
   };
 
   const generateCustomRandom = () => {
-    const allNames = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Henry', 'Iris', 'Jack',
-      'Kelly', 'Liam', 'Mia', 'Noah', 'Olivia', 'Peter', 'Quinn', 'Ryan', 'Sophia', 'Tyler'];
-
+    const allNames = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Henry', 'Iris', 'Jack', 
+                      'Kelly', 'Liam', 'Mia', 'Noah', 'Olivia', 'Peter', 'Quinn', 'Ryan', 'Sophia', 'Tyler'];
+    
     const numPeople = Math.min(Math.max(customVertexCount, 2), 20);
     const selectedPeople = allNames.slice(0, numPeople);
-
+    
     setPeople(selectedPeople);
-
+    
     const randomTransactions = [];
     const numTransactions = Math.floor(Math.random() * (numPeople * 1.5)) + numPeople * 1.5;
-
+    
     for (let i = 0; i < numTransactions; i++) {
       const from = selectedPeople[Math.floor(Math.random() * selectedPeople.length)];
       let to = selectedPeople[Math.floor(Math.random() * selectedPeople.length)];
@@ -797,7 +821,7 @@ const CashFlowMinimizer = () => {
       const amt = Math.floor(Math.random() * 90) + 10;
       randomTransactions.push({ from, to, amount: amt });
     }
-
+    
     setTransactions(randomTransactions);
     setShowCustomGenerator(false);
     reset();
@@ -1110,7 +1134,7 @@ const CashFlowMinimizer = () => {
                   </button>
                 </div>
               )}
-
+              
               {transactions.length > 0 && !showResults && (
                 <button
                   onClick={minimizeCashFlow}
@@ -1121,7 +1145,7 @@ const CashFlowMinimizer = () => {
                   {isAnimating ? 'Optimizing...' : 'Start Optimization'}
                 </button>
               )}
-
+              
               {(isAnimating || showResults) && (
                 <button
                   onClick={reset}
@@ -1131,7 +1155,7 @@ const CashFlowMinimizer = () => {
                   Reset Animation
                 </button>
               )}
-
+              
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={saveState}
@@ -1153,7 +1177,7 @@ const CashFlowMinimizer = () => {
                   />
                 </label>
               </div>
-
+              
               <button
                 onClick={clearAll}
                 disabled={isAnimating}
@@ -1293,8 +1317,8 @@ const CashFlowMinimizer = () => {
                           };
                           const isBest = idx === 0;
                           return (
-                            <tr
-                              key={result.algorithm}
+                            <tr 
+                              key={result.algorithm} 
                               className={`border-b border-white/10 ${isBest ? 'bg-green-500/20' : ''}`}
                             >
                               <td className="px-4 py-3 font-semibold">
@@ -1316,7 +1340,7 @@ const CashFlowMinimizer = () => {
                               <td className="px-4 py-3 text-center">
                                 <div className="flex items-center justify-center gap-2">
                                   <div className="w-24 bg-white/10 rounded-full h-2">
-                                    <div
+                                    <div 
                                       className="bg-gradient-to-r from-green-400 to-cyan-500 h-2 rounded-full"
                                       style={{ width: `${100 - (result.transactions / transactions.length * 100)}%` }}
                                     />
@@ -1332,7 +1356,7 @@ const CashFlowMinimizer = () => {
                 </div>
                 <div className="mt-4 bg-blue-500/10 border border-blue-400/30 p-4 rounded-xl">
                   <p className="text-blue-200 text-sm text-center">
-                    <span className="font-bold">⚡ Web Worker Powered:</span> Each algorithm runs 50 times in an isolated thread after 5 warm-up runs.
+                    <span className="font-bold">⚡ Web Worker Powered:</span> Each algorithm runs 50 times in an isolated thread after 5 warm-up runs. 
                     Average time (with outliers removed) in milliseconds ensures accurate, consistent performance measurements without UI interference.
                   </p>
                 </div>
