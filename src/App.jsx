@@ -61,7 +61,7 @@ const GraphVisualization = ({ people, transactions, animationSteps, currentStep,
   useEffect(() => {
     const animate = () => {
       setPulsePhase(prev => (prev + 0.05) % (Math.PI * 2));
-      
+
       setParticles(prev => {
         const updated = prev.filter(p => p.life > 0);
         updated.forEach(p => p.update());
@@ -85,7 +85,7 @@ const GraphVisualization = ({ people, transactions, animationSteps, currentStep,
       if (step.type === 'transaction') {
         const fromPos = nodePositions[step.from];
         const toPos = nodePositions[step.to];
-        
+
         if (fromPos && toPos) {
           const newParticles = [];
           for (let i = 0; i < 20; i++) {
@@ -105,7 +105,7 @@ const GraphVisualization = ({ people, transactions, animationSteps, currentStep,
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
-    
+
     canvas.width = 800 * dpr;
     canvas.height = 600 * dpr;
     canvas.style.width = '800px';
@@ -144,12 +144,12 @@ const GraphVisualization = ({ people, transactions, animationSteps, currentStep,
 
       const currentStepData = showOptimized && animationSteps[currentStep];
       const isActive = showOptimized && currentStepData && currentStepData.type === 'transaction' &&
-                       currentStepData.from === txn.from && currentStepData.to === txn.to;
+        currentStepData.from === txn.from && currentStepData.to === txn.to;
 
       ctx.beginPath();
       ctx.moveTo(startX, startY);
       ctx.quadraticCurveTo(controlX, controlY, endX, endY);
-      
+
       if (showOptimized) {
         ctx.strokeStyle = isActive ? '#10b981' : '#6366f1';
         ctx.lineWidth = isActive ? 5 : 3;
@@ -160,12 +160,12 @@ const GraphVisualization = ({ people, transactions, animationSteps, currentStep,
         ctx.lineWidth = 2;
         ctx.shadowBlur = 0;
       }
-      
+
       ctx.stroke();
 
       const arrowSize = 12;
       const endAngle = Math.atan2(endY - controlY, endX - controlX);
-      
+
       ctx.beginPath();
       ctx.moveTo(endX, endY);
       ctx.lineTo(
@@ -182,11 +182,11 @@ const GraphVisualization = ({ people, transactions, animationSteps, currentStep,
 
       const midX = (startX + endX) / 2 + 20 * Math.cos(angle + Math.PI / 2);
       const midY = (startY + endY) / 2 + 20 * Math.sin(angle + Math.PI / 2);
-      
+
       ctx.shadowBlur = 0;
       ctx.fillStyle = '#1e293b';
       ctx.fillRect(midX - 25, midY - 12, 50, 24);
-      
+
       ctx.fillStyle = isActive ? '#10b981' : '#fbbf24';
       ctx.font = 'bold 14px Arial';
       ctx.textAlign = 'center';
@@ -202,13 +202,13 @@ const GraphVisualization = ({ people, transactions, animationSteps, currentStep,
       if (!pos) return;
 
       const currentStepData = showOptimized && animationSteps[currentStep];
-      const isActive = currentStepData && 
-                       ((currentStepData.type === 'transaction' && 
-                         (currentStepData.from === person || currentStepData.to === person)) ||
-                        (currentStepData.type === 'consider' && 
-                         currentStepData.people && currentStepData.people.includes(person)) ||
-                        (currentStepData.type === 'select' && 
-                         (currentStepData.creditor === person || currentStepData.debtor === person)));
+      const isActive = currentStepData &&
+        ((currentStepData.type === 'transaction' &&
+          (currentStepData.from === person || currentStepData.to === person)) ||
+          (currentStepData.type === 'consider' &&
+            currentStepData.people && currentStepData.people.includes(person)) ||
+          (currentStepData.type === 'select' &&
+            (currentStepData.creditor === person || currentStepData.debtor === person)));
 
       const pulseSize = isActive ? 5 + Math.sin(pulsePhase * 3) * 3 : 0;
       const nodeRadius = 30 + pulseSize;
@@ -225,7 +225,7 @@ const GraphVisualization = ({ people, transactions, animationSteps, currentStep,
       ctx.arc(pos.x, pos.y, nodeRadius, 0, 2 * Math.PI);
       ctx.fillStyle = getPersonColor(person);
       ctx.fill();
-      
+
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 3;
       ctx.stroke();
@@ -305,7 +305,7 @@ const CashFlowMinimizer = () => {
   const [customVertexCount, setCustomVertexCount] = useState(5);
   const [showCustomGenerator, setShowCustomGenerator] = useState(false);
   const [animationSpeed, setAnimationSpeed] = useState(1500);
-  
+
   const workerRef = useRef(null);
 
   // Initialize Web Worker with FIXED TIMING
@@ -646,7 +646,7 @@ const CashFlowMinimizer = () => {
         return { transactions: minimized, steps };
       };
 
-      // Worker message handler with FIXED TIMING
+      // Worker message handler with PROPER BENCHMARKING
       self.onmessage = function(e) {
         const { algorithm, netAmount } = e.data;
         
@@ -671,25 +671,55 @@ const CashFlowMinimizer = () => {
             algorithmFunc = greedyAlgorithm;
         }
         
-        // Single run with precise timing
-        // Clone the data once
-        const clonedData = JSON.parse(JSON.stringify(netAmount));
+        // STEP 1: Warm-up runs (5 times) to let JIT compile and optimize
+        for (let i = 0; i < 5; i++) {
+          const warmupData = JSON.parse(JSON.stringify(netAmount));
+          algorithmFunc(warmupData);
+        }
         
-        // Run once with high-resolution timing
-        const startTime = performance.now();
-        const result = algorithmFunc(clonedData);
-        const endTime = performance.now();
+        // STEP 2: Pre-clone data for actual benchmark runs
+        const iterations = 50; // 50 runs for statistical accuracy
+        const clonedData = [];
+        for (let i = 0; i < iterations; i++) {
+          clonedData.push(JSON.parse(JSON.stringify(netAmount)));
+        }
         
-        // Time in milliseconds with high precision
-        const executionTimeMs = endTime - startTime;
+        // STEP 3: Actual timed runs (only algorithm execution)
+        const times = [];
+        let result;
+        
+        for (let i = 0; i < iterations; i++) {
+          const startTime = performance.now();
+          result = algorithmFunc(clonedData[i]);
+          const endTime = performance.now();
+          times.push(endTime - startTime);
+        }
+        
+        // STEP 4: Statistical analysis
+        times.sort((a, b) => a - b);
+        
+        // Remove outliers (top and bottom 10%)
+        const trimCount = Math.floor(iterations * 0.1);
+        const trimmedTimes = times.slice(trimCount, iterations - trimCount);
+        
+        // Calculate median (most robust)
+        const medianTime = trimmedTimes[Math.floor(trimmedTimes.length / 2)];
+        
+        // Calculate average
+        const avgTime = trimmedTimes.reduce((a, b) => a + b, 0) / trimmedTimes.length;
+        
+        // Min and max from trimmed data
+        const minTime = trimmedTimes[0];
+        const maxTime = trimmedTimes[trimmedTimes.length - 1];
         
         self.postMessage({
           result,
-          executionTime: executionTimeMs, // Keep in milliseconds for accuracy
-          avgTime: executionTimeMs,
-          allTimes: [executionTimeMs],
-          minTime: executionTimeMs,
-          maxTime: executionTimeMs
+          executionTime: avgTime, // Use average of trimmed times
+          medianTime: medianTime,
+          avgTime: avgTime,
+          allTimes: times,
+          minTime: minTime,
+          maxTime: maxTime
         });
       };
     `;
@@ -726,12 +756,12 @@ const CashFlowMinimizer = () => {
     const names = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank'];
     const numPeople = Math.floor(Math.random() * 3) + 4;
     const selectedPeople = names.slice(0, numPeople);
-    
+
     setPeople(selectedPeople);
-    
+
     const randomTransactions = [];
     const numTransactions = Math.floor(Math.random() * 5) + 5;
-    
+
     for (let i = 0; i < numTransactions; i++) {
       const from = selectedPeople[Math.floor(Math.random() * selectedPeople.length)];
       let to = selectedPeople[Math.floor(Math.random() * selectedPeople.length)];
@@ -741,23 +771,23 @@ const CashFlowMinimizer = () => {
       const amt = Math.floor(Math.random() * 90) + 10;
       randomTransactions.push({ from, to, amount: amt });
     }
-    
+
     setTransactions(randomTransactions);
     reset();
   };
 
   const generateCustomRandom = () => {
-    const allNames = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Henry', 'Iris', 'Jack', 
-                      'Kelly', 'Liam', 'Mia', 'Noah', 'Olivia', 'Peter', 'Quinn', 'Ryan', 'Sophia', 'Tyler'];
-    
+    const allNames = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Henry', 'Iris', 'Jack',
+      'Kelly', 'Liam', 'Mia', 'Noah', 'Olivia', 'Peter', 'Quinn', 'Ryan', 'Sophia', 'Tyler'];
+
     const numPeople = Math.min(Math.max(customVertexCount, 2), 20);
     const selectedPeople = allNames.slice(0, numPeople);
-    
+
     setPeople(selectedPeople);
-    
+
     const randomTransactions = [];
     const numTransactions = Math.floor(Math.random() * (numPeople * 1.5)) + numPeople * 1.5;
-    
+
     for (let i = 0; i < numTransactions; i++) {
       const from = selectedPeople[Math.floor(Math.random() * selectedPeople.length)];
       let to = selectedPeople[Math.floor(Math.random() * selectedPeople.length)];
@@ -767,7 +797,7 @@ const CashFlowMinimizer = () => {
       const amt = Math.floor(Math.random() * 90) + 10;
       randomTransactions.push({ from, to, amount: amt });
     }
-    
+
     setTransactions(randomTransactions);
     setShowCustomGenerator(false);
     reset();
@@ -1080,7 +1110,7 @@ const CashFlowMinimizer = () => {
                   </button>
                 </div>
               )}
-              
+
               {transactions.length > 0 && !showResults && (
                 <button
                   onClick={minimizeCashFlow}
@@ -1091,7 +1121,7 @@ const CashFlowMinimizer = () => {
                   {isAnimating ? 'Optimizing...' : 'Start Optimization'}
                 </button>
               )}
-              
+
               {(isAnimating || showResults) && (
                 <button
                   onClick={reset}
@@ -1101,7 +1131,7 @@ const CashFlowMinimizer = () => {
                   Reset Animation
                 </button>
               )}
-              
+
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={saveState}
@@ -1123,7 +1153,7 @@ const CashFlowMinimizer = () => {
                   />
                 </label>
               </div>
-              
+
               <button
                 onClick={clearAll}
                 disabled={isAnimating}
@@ -1218,9 +1248,9 @@ const CashFlowMinimizer = () => {
                 </div>
                 <div className="text-center bg-gradient-to-br from-blue-500/20 to-indigo-500/20 p-6 rounded-xl">
                   <p className="text-4xl font-bold text-blue-400 mb-2">
-                    {algorithmResults.find(r => r.algorithm === selectedAlgorithm)?.executionTime.toFixed(6) || 0}
+                    {algorithmResults.find(r => r.algorithm === selectedAlgorithm)?.executionTime.toFixed(4) || 0}
                   </p>
-                  <p className="text-white/70 font-semibold text-sm">Time (ms)</p>
+                  <p className="text-white/70 font-semibold text-sm">Avg Time (ms)</p>
                 </div>
                 <div className="text-center bg-gradient-to-br from-teal-500/20 to-emerald-500/20 p-6 rounded-xl">
                   <p className="text-4xl font-bold text-teal-400 mb-2">
@@ -1242,7 +1272,7 @@ const CashFlowMinimizer = () => {
                         <th className="px-4 py-3 text-center">Transactions</th>
                         <th className="px-4 py-3 text-center">Reduction %</th>
                         <th className="px-4 py-3 text-center">Cash Flow</th>
-                        <th className="px-4 py-3 text-center">Time (ms)</th>
+                        <th className="px-4 py-3 text-center">Avg Time (ms)</th>
                         <th className="px-4 py-3 text-center">Efficiency</th>
                       </tr>
                     </thead>
@@ -1263,8 +1293,8 @@ const CashFlowMinimizer = () => {
                           };
                           const isBest = idx === 0;
                           return (
-                            <tr 
-                              key={result.algorithm} 
+                            <tr
+                              key={result.algorithm}
                               className={`border-b border-white/10 ${isBest ? 'bg-green-500/20' : ''}`}
                             >
                               <td className="px-4 py-3 font-semibold">
@@ -1281,12 +1311,12 @@ const CashFlowMinimizer = () => {
                                 ${result.totalCashFlow.toFixed(0)}
                               </td>
                               <td className="px-4 py-3 text-center font-bold text-blue-400">
-                                {result.executionTime.toFixed(6)}
+                                {result.executionTime.toFixed(4)}
                               </td>
                               <td className="px-4 py-3 text-center">
                                 <div className="flex items-center justify-center gap-2">
                                   <div className="w-24 bg-white/10 rounded-full h-2">
-                                    <div 
+                                    <div
                                       className="bg-gradient-to-r from-green-400 to-cyan-500 h-2 rounded-full"
                                       style={{ width: `${100 - (result.transactions / transactions.length * 100)}%` }}
                                     />
@@ -1302,8 +1332,8 @@ const CashFlowMinimizer = () => {
                 </div>
                 <div className="mt-4 bg-blue-500/10 border border-blue-400/30 p-4 rounded-xl">
                   <p className="text-blue-200 text-sm text-center">
-                    <span className="font-bold">⚡ Web Worker Powered:</span> Each algorithm runs in an isolated thread with high-resolution timing. 
-                    Execution time in milliseconds (ms) ensures accurate, reliable performance measurements without UI interference.
+                    <span className="font-bold">⚡ Web Worker Powered:</span> Each algorithm runs 50 times in an isolated thread after 5 warm-up runs.
+                    Average time (with outliers removed) in milliseconds ensures accurate, consistent performance measurements without UI interference.
                   </p>
                 </div>
               </div>
